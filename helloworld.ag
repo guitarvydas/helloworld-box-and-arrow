@@ -1,0 +1,14 @@
+schematic App {
+  contains: HelloWorld
+  contains: Logger
+  wire HelloWorld.out -> Logger.S
+  wire my.go -> HelloWorld.in
+}
+
+component HelloWorld {
+  when go: Send(out,"Hello World");
+}
+
+component Logger {
+  when S: console.log(S.data);
+}
