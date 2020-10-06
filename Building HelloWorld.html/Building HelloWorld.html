@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<title>Building HelloWorld</title>
+	<meta name="author" content="Paul Tarvydas"/>
+</head>
+<body>
+
+<h1 id="introduction">Introduction</h1>
+
+<p>In this essay, I describe the steps I take to build a very simple box-and-arrow app, called HelloWorld.</p>
+
+<h1 id="developmentsteps">Development Steps</h1>
+
+<h2 id="drawthediagram">Draw the Diagram</h2>
+
+<p>The simplest box-and-arrow app that I can think of consists of two boxes - one that outputs the string &#8220;hello world&#8221; and another box that displays any string sent to it.</p>
+
+<p>The program is contained by a top-level box called App.</p>
+
+<p>The top-level box has one input - &#8220;go&#8221;. Sending anything into the &#8220;go&#8221; pin causes the first box to output &#8220;hello world&#8221; and send that string to the display box.</p>
+
+<p>The diagram for this system appears in Fig &lt;$n:figure:Hello World&gt; below:</p>
+
+<p><img src="HelloWorld-SimpleHelloWorld.png" alt="" id="helloworld-simplehelloworld" width="385" height="156" />
+Fig &lt;$n:figure:Hello World&gt;Hello World</p>
+
+<h2 id="writethedslcodemanually">Write The DSL Code Manually</h2>
+
+<p>The first time through, I write the code manually, to get a &#8220;feel&#8221; for what the editor needs to output.</p>
+
+<p>The code is written in DSL form.</p>
+
+<p>The program in Fig. &lt;$n:figure:Hello World&gt; looks like:</p>
+
+<p>schematic App {
+contains: HelloWorld
+contains: Logger
+wire HelloWorld.out -&gt; Logger.S
+wire my.go -&gt; HelloWorld.in
+}</p>
+
+<p>component HelloWorld {
+when go: Send(out,&#8220;Hello World&#8221;);
+}</p>
+
+<p>component Logger {
+when S: console.log(S.data);
+}</p>
+
+<p>I will change / upgrade this later, but it is a good starting point.</p>
+
+<p>What&#8217;s missing? Schematics can contain more than one part of the same Kind (aka type), but in this simple example, each part has a unique Kind. Later, we will want to fix this by giving each part a unique name as well as a Kind, or, by creating a syntax for Kind synonyms, or, maybe some other idea will come to us.</p>
+
+<p>For now, the Kind and the part name are one in the same. For example, the HelloWorld part has the name &#8220;HelloWorld&#8221; and has the Kind &#8220;HelloWorld&#8221;.</p>
+
+<h2 id="transpilethedslcodemanually">Transpile the DSL Code Manually</h2>
+
+<p>The first time through, I transpile the diagram into code for some language, manually. Again, this will give me a &#8220;feel&#8221; for what the diagram transpiler will need to do.</p>
+
+<p>I choose to target the language JS (JavaScript). Any language that supports closures should make this &#8220;easy&#8221;.<a href="#fn:1" id="fnref:1" title="see footnote" class="footnote"><sup>1</sup></a> I think that many people can read JS.</p>
+
+<p>The resulting JS code is filled with details.</p>
+
+<p>This is a good example of how details detract from thinking about Architecture. The Architecture of this simple diagram is lost in a sea of details…</p>
+
+<p>The main implementation detail is that we create a closure (aka anonymous function) for each component. We also create a closure for the top-level App. I&#8217;ve chosen to not use prototype inheritance, and, I&#8217;ve chosen to eschew optimization - that can come later, let&#8217;s just get this to work.</p>
+
+<p>Note that prototype inheritance actually costs runtime. The DSL will expand all components into full code, including all inherited code/properties. DRY<a href="#fn:2" id="fnref:2" title="see footnote" class="footnote"><sup>2</sup></a> happens at the DSL level and we don&#8217;t care what happens at the JS (assembler) level. JS&#8217;s inheritance mechanism will actually make the code run slower. It&#8217;s the same with all OO inheritance - we trade off code-based DRY for compile-time efficiency.<a href="#fn:3" id="fnref:3" title="see footnote" class="footnote"><sup>3</sup></a></p>
+
+<p>Note that the code for the schematic (composite) part, &#8220;App&#8221;, is different from the leaf parts &#8220;HelloWorld&#8221; and &#8220;Logger&#8221;.</p>
+
+<p>I, also, build the kernel code manually, so we can see what is going on…</p>
+
+<p>Events appear as JS objects {&#8216;inputPin&#8217;:…, 'outputPin:…, &#8216;data&#8217;:…}.</p>
+
+<p>[paragraph deleted<a href="#fn:4" id="fnref:4" title="see footnote" class="footnote"><sup>4</sup></a> - the Architecture will be more clearly expressed as per the next paragraph]</p>
+
+<p>There are four (4) cases of event sending that need to be considered:</p>
+
+<ol>
+<li>the &#8220;normal&#8221; case - output from a child part going to the input of another child par</li>
+<li>input from a schematic&#8217;s input going to children parts</li>
+<li>output from children parts going to the output of a schematic</li>
+<li>input from a schematic going to an output of the same schematic.</li>
+</ol>
+
+<p>These cases are broken out in the function distributeSingleOutput().</p>
+
+<p>Every part has a &#8216;parent&#8217; field. The top-level part will have null as its parent.</p>
+
+<p>Every part has one (1) input queue and one (1) output queue. The input queue is required to allow the parts to work in an asynchronous manner. The output queue decouples outputs from the rest of the system - allowing for deferred Send()s. It is possible to get into a situation of runtime rendezvous spaghetti chains unless we use deferred Send()s.<a href="#fn:5" id="fnref:5" title="see footnote" class="footnote"><sup>5</sup></a></p>
+
+<p>In all of the manually written code, I&#8217;ve chosen to ignore all error edge cases, for clarity. This code cannot be used for production, but, we are going to replace the code with automatically transpiled code, later.</p>
+
+<p>We are building this code in a sequential environment, so, isBusy() is always false for leaf parts and is calculated recursively for schematics (true if any child is (recursively) busy).</p>
+
+<p>IsBusy() is used by the isReady() function, which is used by the dispatcher().</p>
+
+<p>IsBusy() needs more attention when the kernel is running in a truly asynchronous (bare metal, no O/S) environment.</p>
+
+<p>Note the API:</p>
+
+<ul>
+<li>one function from the outside - Inject(), and</li>
+<li>one function for parts - Send().</li>
+</ul>
+
+<p>Inject() pushes an event onto the input queue of the top-level part and starts the dispatcher(). Inject() can be called multiple times, if multiple events need to be sent into the top-level part. This version of Inject() is written to work in a synchronous (call/return) environment. Inject() would be slightly different in a bare-metal environment.</p>
+
+<p>Send() is almost like Inject(), except that it does not start the dispatcher(). The dispatcher is already running when Send() is called by a part.</p>
+
+<p>The app user must be careful to call Inject() at least once from the outside.</p>
+
+<h2 id="createhtmlfile">Create HTML File</h2>
+
+<p>Kernel.js now contains the kernel.</p>
+
+<p>&#8220;HelloWorld-Simple Hello World.svg&#8221; now contains the diagram.</p>
+
+<p>Helloworld.html contains the manually transpiled parts.</p>
+
+<p>Helloworld.html shows the diagram and runs the App.</p>
+
+<div class="footnotes">
+<hr />
+<ol>
+
+<li id="fn:1">
+<p>I learned to think in closures using CL (Common Lisp). YMMV. <a href="#fnref:1" title="return to body" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+<li id="fn:2">
+<p>Don't Repeat Yourself <a href="#fnref:2" title="return to body" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+<li id="fn:3">
+<p>JS calculates inheritance chains at runtime, OO can calculate inheritance chains at compile&#8211;time. The DSL just spits out final versions of each component. We would need to run experiments to see if the DSL approach is more efficient than the OO approach. JS is the worst of the bunch, but we really don't care &#8211; what matters is only what the user experiences. <a href="#fnref:3" title="return to body" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+<li id="fn:4">
+<p>It used to read &#8220;For clarity of Architecture, I choose to segregate input pins from output pins in the event objects. This is probably the first thing that will be optimized (one &#8216;pin&#8217; is enough, if we overload the meaning of &#8216;pin&#8217; to be appropriate for the situation (input vs. output)).&#8221; <a href="#fnref:4" title="return to body" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+<li id="fn:5">
+<p>Don't worry about this detail for now. It is only important in bare&#8211;metal situations, i.e. no operating system (e.g. throwing out Linux on IoT devices, and replacing it with this stuff). <a href="#fnref:5" title="return to body" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+</ol>
+</div>
+
+</body>
+</html>
+
