@@ -1,0 +1,112 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>hello world using box and arrow notation</title>
+    <script src="./kernel.js"></script>
+    <script>
+///////////
+// manually transpiled code
+///////////
+
+function App(parent, nameInParent) {
+    this.name = nameInParent;
+    this.kind = "_schematic";
+    this.parent = parent;
+    this.inputQueue  = [];
+    this.outputQueue  = [];
+    this.isReady  = function()  { 
+	    return (!kernel.isEmptyInputQueue(this)) && (! this.isBusy());
+	};
+    this.isSchematic  = true;
+    this.isBusy  = function () {
+	for (let childPair of this.parts) {
+	    let child = childPair.instance;
+	    if (child.isBusy()) {
+		return true;
+	    }
+	}
+	return false;
+    };
+    this.reactorFunction = _schematicInputReactor;
+    this.wires = 
+	[
+	    {
+		'sender' : {name: "App", inputPin: "go", outputPin: null}, 
+		'receivers' : [ {name: "HelloWorld", inputPin: "in", outputPin: null}  ]
+	    },
+	    {
+		'sender' : {name: "HelloWorld", inputPin: null, outputPin: "out"}, 
+		'receivers' : [ {name: "Display", inputPin: "S", outputPin: null}  ]
+	    }
+	];
+    this.parts = 
+	[ 
+	    {name: "HelloWorld", instance: new HelloWorld(this, "HelloWorld")}, 
+	    {name: "Display", instance: new Display(this, "Display")}
+	];
+    kernel.InstallSchematicParts (this);
+}
+
+function HelloWorld(parent, nameInParent) {
+    this.kind = "HelloWorld";
+    this.name = nameInParent;
+    this.parent = parent;
+    this.inputQueue = [];
+    this.outputQueue = [];
+    this.isSchematic = false;
+    this.isReady = function()  { return !kernel.isEmptyInputQueue(this); };
+    this.isBusy = function () { return false; };
+    this.reactorFunction =
+	function (ev) {
+	    if (ev.inputPin == "in") {
+		kernel.Send(this,"out","hello world");
+	    }
+	};
+};
+
+function Display(parent, nameInParent) {
+    this.kind = "Display";
+    this.name = nameInParent;
+    this.parent = parent;
+    this.inputQueue = [];
+    this.outputQueue = [];
+    this.isSchematic = false;
+    this.isReady = function()  { return !kernel.isEmptyInputQueue(this); };
+    this.isBusy = function () { return false; };
+    this.reactorFunction =
+	    function (ev) {
+		if (ev.inputPin == "S") {
+		    console.log(ev.data);
+		}
+	    };
+}
+
+var kernel = new Kernel();
+
+function run () {
+  kernel.InstallPart ("App", new App(null, "App"));
+  kernel.Inject("App","go",true);
+}
+
+</script>
+  </head>
+
+  <body>
+<h1>Hello World Using Box and Arrow Notation</h1>
+<p>
+The diagram, below, was manually compiled into
+javascript code and included in hello.html.
+</p>
+<p>
+The kernel is in kernel.js.
+</p>
+<img src="HelloWorld-Simple Hello World.svg">
+<p>
+Click the button and watch the console for output.
+</p>
+<button onclick="run()">RUN hello world</button>
+
+<hr>
+<!-- hhmts start -->Last modified: Mon Oct  5 22:40:49 EDT 2020 <!-- hhmts end -->
+</body>
+</html>
